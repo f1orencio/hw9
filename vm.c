@@ -114,12 +114,8 @@ void initVM() {
 //< Garbage Collection init-gray-stack
 //> Global Variables init-globals
 
-  initTable(&vm.globals);
-//< Global Variables init-globals
-//> Hash Tables init-strings
-  initTable(&vm.strings);
-//< Hash Tables init-strings
-//> Methods and Initializers init-init-string
+initTable(&vm.globalNames);
+initValueArray(&vm.globalValues);
 
 //> null-init-string
   vm.initString = NULL;
@@ -133,13 +129,9 @@ void initVM() {
 }
 
 void freeVM() {
-//> Global Variables free-globals
-  freeTable(&vm.globals);
-//< Global Variables free-globals
-//> Hash Tables free-strings
-  freeTable(&vm.strings);
-//< Hash Tables free-strings
-//> Methods and Initializers clear-init-string
+freeTable(&vm.globalNames);
+freeValueArray(&vm.globalValues);
+
   vm.initString = NULL;
 //< Methods and Initializers clear-init-string
 //> Strings call-free-objects
@@ -510,35 +502,30 @@ static InterpretResult run() {
       }
 //< Local Variables interpret-set-local
 //> Global Variables interpret-get-global
-      case OP_GET_GLOBAL: {
-        ObjString* name = READ_STRING();
-        Value value;
-        if (!tableGet(&vm.globals, name, &value)) {
-          runtimeError("Undefined variable '%s'.", name->chars);
-          return INTERPRET_RUNTIME_ERROR;
-        }
-        push(value);
-        break;
-      }
-//< Global Variables interpret-get-global
-//> Global Variables interpret-define-global
-      case OP_DEFINE_GLOBAL: {
-        ObjString* name = READ_STRING();
-        tableSet(&vm.globals, name, peek(0));
-        pop();
-        break;
-      }
-//< Global Variables interpret-define-global
-//> Global Variables interpret-set-global
-      case OP_SET_GLOBAL: {
-        ObjString* name = READ_STRING();
-        if (tableSet(&vm.globals, name, peek(0))) {
-          tableDelete(&vm.globals, name); // [delete]
-          runtimeError("Undefined variable '%s'.", name->chars);
-          return INTERPRET_RUNTIME_ERROR;
-        }
-        break;
-      }
+case OP_GET_GLOBAL: {
+  Value value = vm.globalValues.values[READ_BYTE()];
+  if (IS_UNDEFINED(value)) {
+    runtimeError("Undefined variable.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+  push(value);
+  break;
+}
+
+case OP_DEFINE_GLOBAL: {
+  vm.globalValues.values[READ_BYTE()] = pop();
+  break;
+}
+
+case OP_SET_GLOBAL: {
+  uint8_t index = READ_BYTE();
+  if (IS_UNDEFINED(vm.globalValues.values[index])) {
+    runtimeError("Undefined variable.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+  vm.globalValues.values[index] = peek(0);
+  break;
+}
 //< Global Variables interpret-set-global
 //> Closures interpret-get-upvalue
       case OP_GET_UPVALUE: {
